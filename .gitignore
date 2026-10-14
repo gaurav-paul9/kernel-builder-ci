@@ -1,0 +1,19 @@
+# Build artifacts
+out/
+toolchains/
+kernel/
+kernel-modules/
+kernel-devicetrees/
+repack/
+*.apk
+*.tar.gz
+*.img
+*.zip
+*.bin
+*.log
+*.env
+*.sha256
+SHA256SUMS.txt
+options.txt
+release_notes.md
+release_notes.txt

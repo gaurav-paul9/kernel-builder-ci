@@ -1,0 +1,466 @@
+name: OnePlus 12R (Aston) Kernel CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      rom:
+        description: "Target ROM"
+        required: true
+        type: choice
+        default: "Yaap"
+        options:
+          - "Yaap"
+          - "Lunaris"
+
+      build_type:
+        description: "Root variant to build"
+        required: true
+        type: choice
+        default: "all"
+        options:
+          - "all"
+          - "vanilla"
+          - "ksun"
+          - "ksun-susfs"
+          - "resukisu-susfs"
+
+      clang_version:
+        description: "AOSP Clang version"
+        required: true
+        type: choice
+        default: "clang-r563880c"
+        options:
+          - "clang-r563880c"
+          - "clang-r547379"
+          - "clang-r536225"
+          - "clang-r487747c"
+          - "clang-r450784d"
+
+      kernel_branch:
+        description: "Kernel Branch (Leave empty for default 'seventeen')"
+        required: false
+        type: string
+        default: ""
+
+      custom_boot_url:
+        description: "Custom base boot.img URL (Leave empty to use ROM default)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  prepare:
+    name: Prepare Build Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      rom: ${{ inputs.rom }}
+      clang_version: ${{ inputs.clang_version }}
+      base_boot_url: ${{ steps.set-urls.outputs.base_boot_url }}
+      kernel_repo: ${{ steps.set-urls.outputs.kernel_repo }}
+      kernel_branch: ${{ steps.set-urls.outputs.kernel_branch }}
+      modules_repo: ${{ steps.set-urls.outputs.modules_repo }}
+      modules_branch: ${{ steps.set-urls.outputs.modules_branch }}
+      devicetrees_repo: ${{ steps.set-urls.outputs.devicetrees_repo }}
+      devicetrees_branch: ${{ steps.set-urls.outputs.devicetrees_branch }}
+    steps:
+      - name: Resolve Matrix
+        id: set-matrix
+        run: |
+          BUILD_TYPE="${{ inputs.build_type }}"
+          if [ "$BUILD_TYPE" = "all" ]; then
+            echo 'matrix=["vanilla", "ksun", "ksun-susfs", "resukisu-susfs"]' >> $GITHUB_OUTPUT
+          else
+            echo "matrix=[\"$BUILD_TYPE\"]" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Resolve Repository and Base URLs
+        id: set-urls
+        run: |
+          ROM="${{ inputs.rom }}"
+          CUSTOM_BOOT_URL="${{ inputs.custom_boot_url }}"
+          KERNEL_BRANCH_INPUT="${{ inputs.kernel_branch }}"
+
+          if [ "$ROM" = "Yaap" ]; then
+            BOOT_URL="https://files.gauravbuilds.xyz/release/aston/Yaap/imgs-17/boot.img"
+            K_REPO="https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550"
+            K_BRANCH="seventeen"
+            M_REPO="https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550-modules"
+            M_BRANCH="seventeen"
+            DT_REPO="https://github.com/LineageOS/android_kernel_oneplus_sm8550-devicetrees"
+            DT_BRANCH="lineage-24.0"
+          else
+            BOOT_URL="https://files.gauravbuilds.xyz/release/aston/Lunaris/imgs/boot.img"
+            K_REPO="https://github.com/OnePlus12R-development/android_kernel_oneplus_sm8550"
+            K_BRANCH="seventeen"
+            M_REPO="https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550-modules"
+            M_BRANCH="lunaris"
+            DT_REPO="https://github.com/OnePlus12R-development/android_kernel_oneplus_sm8550-devicetrees"
+            DT_BRANCH="seventeen"
+          fi
+
+          if [ -n "$CUSTOM_BOOT_URL" ]; then
+            BOOT_URL="$CUSTOM_BOOT_URL"
+          fi
+          if [ -n "$KERNEL_BRANCH_INPUT" ]; then
+            K_BRANCH="$KERNEL_BRANCH_INPUT"
+          fi
+
+          echo "base_boot_url=$BOOT_URL" >> $GITHUB_OUTPUT
+          echo "kernel_repo=$K_REPO" >> $GITHUB_OUTPUT
+          echo "kernel_branch=$K_BRANCH" >> $GITHUB_OUTPUT
+          echo "modules_repo=$M_REPO" >> $GITHUB_OUTPUT
+          echo "modules_branch=$M_BRANCH" >> $GITHUB_OUTPUT
+          echo "devicetrees_repo=$DT_REPO" >> $GITHUB_OUTPUT
+          echo "devicetrees_branch=$DT_BRANCH" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build ${{ matrix.variant }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJson(needs.prepare.outputs.matrix) }}
+
+    steps:
+      - name: Setup SWAP Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 16
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison flex \
+            libssl-dev \
+            libelf-dev \
+            libdw-dev \
+            build-essential \
+            lz4 \
+            git \
+            python3 \
+            curl \
+            dwarves \
+            cpio \
+            zip \
+            unzip \
+            gcc-aarch64-linux-gnu
+
+      - name: Download AOSP Clang
+        run: |
+          CLANG_VER="${{ needs.prepare.outputs.clang_version }}"
+          mkdir -p toolchains/${CLANG_VER}
+          case "$CLANG_VER" in
+            "clang-r450784d")
+              CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android13-qpr3-release/clang-r450784d.tar.gz"
+              ;;
+            "clang-r487747c")
+              CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-qpr3-release/clang-r487747c.tar.gz"
+              ;;
+            "clang-r536225")
+              CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android15-qpr2-release/clang-r536225.tar.gz"
+              ;;
+            "clang-r547379")
+              CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android16-qpr2-release/clang-r547379.tar.gz"
+              ;;
+            "clang-r563880c"|*)
+              CLANG_URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android16-qpr2-release/clang-r563880c.tar.gz"
+              ;;
+          esac
+          echo "Downloading Clang from: $CLANG_URL"
+          curl -fLO "$CLANG_URL"
+          tar -xf "$(basename "$CLANG_URL")" -C toolchains/${CLANG_VER}
+          rm -f "$(basename "$CLANG_URL")"
+
+      - name: Clone Kernel, Modules, and Devicetrees
+        run: |
+          echo "==> Cloning Kernel repository: ${{ needs.prepare.outputs.kernel_repo }} (branch: ${{ needs.prepare.outputs.kernel_branch }})"
+          git clone --depth=1 -b "${{ needs.prepare.outputs.kernel_branch }}" "${{ needs.prepare.outputs.kernel_repo }}.git" kernel
+
+          echo "==> Cloning Modules repository: ${{ needs.prepare.outputs.modules_repo }} (branch: ${{ needs.prepare.outputs.modules_branch }})"
+          git clone --depth=1 -b "${{ needs.prepare.outputs.modules_branch }}" "${{ needs.prepare.outputs.modules_repo }}.git" kernel-modules || true
+
+          echo "==> Cloning Devicetrees repository: ${{ needs.prepare.outputs.devicetrees_repo }} (branch: ${{ needs.prepare.outputs.devicetrees_branch }})"
+          git clone --depth=1 -b "${{ needs.prepare.outputs.devicetrees_branch }}" "${{ needs.prepare.outputs.devicetrees_repo }}.git" kernel-devicetrees || true
+
+      - name: Setup Root Solution (Variant: ${{ matrix.variant }})
+        run: |
+          cd kernel
+          VARIANT="${{ matrix.variant }}"
+          echo "VARIANT=$VARIANT" >> $GITHUB_ENV
+
+          case "$VARIANT" in
+            "vanilla")
+              echo "Building vanilla kernel with no root modifications."
+              ;;
+
+            "ksun")
+              echo "Setting up KernelSU-Next..."
+              curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/dev/kernel/setup.sh" | bash -s dev
+              ;;
+
+            "ksun-susfs")
+              echo "Setting up KernelSU-Next (pershoot dev-susfs) + SuSFS..."
+              curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
+
+              echo "Cloning simonpunk/susfs4ksu (gki-android14-5.15)..."
+              git clone --depth=1 -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git /tmp/susfs
+              cp /tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch ./susfs.patch
+              cp -r /tmp/susfs/kernel_patches/fs/* ./fs/
+              cp -r /tmp/susfs/kernel_patches/include/linux/* ./include/linux/
+              patch -p1 < ./susfs.patch
+
+              cat << 'EOF' >> arch/arm64/configs/gki_defconfig
+CONFIG_KSU_SUSFS=y
+CONFIG_KSU_SUSFS_SUS_PATH=y
+CONFIG_KSU_SUSFS_SUS_MOUNT=y
+CONFIG_KSU_SUSFS_SUS_KSTAT=y
+CONFIG_KSU_SUSFS_SUS_MAP=y
+CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+CONFIG_KSU_SUSFS_ENABLE_LOG=y
+CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+EOF
+              ;;
+
+            "resukisu-susfs")
+              echo "Setting up BakaSU (ReSukiSU) + SuSFS..."
+              curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/refs/heads/main/kernel/setup.sh" | bash -s main
+
+              echo "Cloning simonpunk/susfs4ksu (gki-android14-5.15)..."
+              git clone --depth=1 -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git /tmp/susfs
+              cp /tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch ./susfs.patch
+              cp -r /tmp/susfs/kernel_patches/fs/* ./fs/
+              cp -r /tmp/susfs/kernel_patches/include/linux/* ./include/linux/
+              patch -p1 < ./susfs.patch
+
+              cat << 'EOF' >> arch/arm64/configs/gki_defconfig
+CONFIG_KSU_SUSFS=y
+CONFIG_KSU_SUSFS_SUS_PATH=y
+CONFIG_KSU_SUSFS_SUS_MOUNT=y
+CONFIG_KSU_SUSFS_SUS_KSTAT=y
+CONFIG_KSU_SUSFS_SUS_MAP=y
+CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+CONFIG_KSU_SUSFS_ENABLE_LOG=y
+CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+EOF
+              ;;
+          esac
+
+      - name: Build Kernel Image
+        run: |
+          CLANG_ROOT="${GITHUB_WORKSPACE}/toolchains/${{ needs.prepare.outputs.clang_version }}/bin"
+          export PATH="${CLANG_ROOT}:$PATH"
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export LLVM=1
+          export LLVM_IAS=1
+
+          cd kernel
+          touch .scmversion
+
+          echo "==> Configuring Kernel Defconfigs..."
+          make O=out ARCH=arm64 SUBARCH=arm64 LLVM=1 LLVM_IAS=1 \
+            gki_defconfig vendor/kalama_GKI.config vendor/oplus/kalama_GKI.config vendor/debugfs.config
+
+          echo "==> Building Image with $(nproc) threads..."
+          make -j$(nproc) O=out ARCH=arm64 SUBARCH=arm64 LLVM=1 LLVM_IAS=1 Image
+
+          if [ ! -f out/arch/arm64/boot/Image ]; then
+            echo "ERROR: Kernel Image not found at out/arch/arm64/boot/Image!"
+            exit 1
+          fi
+
+          echo "==> Kernel Image built successfully ($(stat -c%s out/arch/arm64/boot/Image) bytes)"
+
+      - name: Download magiskboot & Repack Boot Image
+        id: repack
+        run: |
+          VARIANT="${{ matrix.variant }}"
+          case "$VARIANT" in
+            "vanilla")
+              TARGET_IMG="boot.img"
+              ;;
+            "ksun")
+              TARGET_IMG="boot-ksun.img"
+              ;;
+            "ksun-susfs")
+              TARGET_IMG="boot-ksun-susfs.img"
+              ;;
+            "resukisu-susfs")
+              TARGET_IMG="boot-resuki-susfs.img"
+              ;;
+            *)
+              TARGET_IMG="boot-${VARIANT}.img"
+              ;;
+          esac
+          echo "TARGET_IMG=$TARGET_IMG" >> $GITHUB_ENV
+          echo "target_img=$TARGET_IMG" >> $GITHUB_OUTPUT
+
+          echo "==> Downloading magiskboot..."
+          MAGISK_APK_URL="https://github.com/topjohnwu/Magisk/releases/download/v28.1/Magisk-v28.1.apk"
+          curl -sL -o /tmp/magisk.apk "$MAGISK_APK_URL"
+          unzip -p /tmp/magisk.apk lib/x86_64/libmagiskboot.so > /tmp/magiskboot
+          chmod +x /tmp/magiskboot
+
+          mkdir -p repack
+          cd repack
+
+          BASE_BOOT_URL="${{ needs.prepare.outputs.base_boot_url }}"
+          echo "==> Downloading base boot.img from: $BASE_BOOT_URL"
+          curl -fL -o base_boot.img "$BASE_BOOT_URL"
+
+          echo "==> Unpacking base boot.img..."
+          /tmp/magiskboot unpack base_boot.img
+
+          echo "==> Replacing kernel Image with compiled kernel..."
+          cp ../kernel/out/arch/arm64/boot/Image kernel
+
+          echo "==> Repacking boot.img into $TARGET_IMG..."
+          /tmp/magiskboot repack base_boot.img "$TARGET_IMG"
+          if [ ! -f "$TARGET_IMG" ] && [ -f new-boot.img ]; then
+            mv new-boot.img "$TARGET_IMG"
+          fi
+
+          if [ ! -s "$TARGET_IMG" ]; then
+            echo "ERROR: Failed to create $TARGET_IMG or file is empty!"
+            exit 1
+          fi
+
+          echo "==> Successfully created $TARGET_IMG ($(stat -c%s "$TARGET_IMG") bytes)"
+          sha256sum "$TARGET_IMG" > "${TARGET_IMG}.sha256"
+          cat "${TARGET_IMG}.sha256"
+
+      - name: Record Build Metadata
+        run: |
+          cd kernel
+          SUBLEVEL=$(grep "^SUBLEVEL =" Makefile | awk '{print $3}')
+          KERNEL_SHA=$(git rev-parse --short HEAD)
+          cd ..
+
+          cd repack
+          cat << EOF > metadata_${{ matrix.variant }}.env
+ROM=${{ needs.prepare.outputs.rom }}
+SUBLEVEL=${SUBLEVEL}
+KERNEL_SHA=${KERNEL_SHA}
+VARIANT=${{ matrix.variant }}
+TARGET_IMG=${{ steps.repack.outputs.target_img }}
+EOF
+
+      - name: Upload Boot Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bootimg-${{ matrix.variant }}
+          path: |
+            repack/${{ steps.repack.outputs.target_img }}
+            repack/${{ steps.repack.outputs.target_img }}.sha256
+            repack/metadata_${{ matrix.variant }}.env
+
+  release:
+    name: Publish GitHub Release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Boot Image Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_assets
+          pattern: bootimg-*
+          merge-multiple: true
+
+      - name: Assemble Release Notes & Checksums
+        id: release_info
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd release_assets
+          echo "==> Collected assets:"
+          ls -la
+
+          cat *.sha256 > SHA256SUMS.txt || true
+          rm -f *.sha256
+
+          # Read sublevel from any metadata file found
+          SUBLEVEL="211"
+          if ls metadata_*.env 1> /dev/null 2>&1; then
+            FIRST_META=$(ls metadata_*.env | head -n 1)
+            SUBLEVEL_VAL=$(grep "^SUBLEVEL=" "$FIRST_META" | cut -d '=' -f 2)
+            if [ -n "$SUBLEVEL_VAL" ]; then
+              SUBLEVEL="$SUBLEVEL_VAL"
+            fi
+            rm -f metadata_*.env
+          fi
+
+          ROM="${{ needs.prepare.outputs.rom }}"
+          DATE_TAG=$(date -u +"%Y%m%d_%H%M")
+          DATE_DISPLAY=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+          TAG_NAME="${ROM}_Aston-v5.15.${SUBLEVEL}-${DATE_TAG}"
+          RELEASE_TITLE="${ROM} OnePlus 12R (Aston) Kernel - $(date -u +"%Y-%m-%d %H:%M") UTC"
+
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
+
+          cat << EOF > "${GITHUB_WORKSPACE}/release_notes.md"
+# ${ROM} OnePlus 12R (Aston / SM8550) Kernel Release
+
+- **ROM:** ${ROM}
+- **Device:** OnePlus 12R (Aston) [SM8550]
+- **Linux Kernel Version:** 5.15.${SUBLEVEL}
+- **Build Timestamp:** ${DATE_DISPLAY}
+- **AOSP Clang Version:** ${{ needs.prepare.outputs.clang_version }}
+
+---
+
+### 📦 Available Boot Images
+- \`boot.img\` - Stock / Vanilla ROM kernel (packed into base ROM boot.img)
+- \`boot-ksun.img\` - KernelSU-Next (dev branch)
+- \`boot-ksun-susfs.img\` - KernelSU-Next (dev-susfs) + SuSFS v1.5.x
+- \`boot-resuki-susfs.img\` - BakaSU (ReSukiSU) + SuSFS v1.5.x
+
+---
+
+### 🔗 Source References
+- **Kernel Tree:** [${{ needs.prepare.outputs.kernel_repo }}](${{ needs.prepare.outputs.kernel_repo }}) (\`${{ needs.prepare.outputs.kernel_branch }}\`)
+- **Modules Tree:** [${{ needs.prepare.outputs.modules_repo }}](${{ needs.prepare.outputs.modules_repo }}) (\`${{ needs.prepare.outputs.modules_branch }}\`)
+- **Devicetrees:** [${{ needs.prepare.outputs.devicetrees_repo }}](${{ needs.prepare.outputs.devicetrees_repo }}) (\`${{ needs.prepare.outputs.devicetrees_branch }}\`)
+- **Base boot.img Source:** [${{ needs.prepare.outputs.base_boot_url }}](${{ needs.prepare.outputs.base_boot_url }})
+- **KernelSU-Next:** [KernelSU-Next/KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next)
+- **KernelSU-Next (SuSFS):** [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next/tree/dev-susfs)
+- **SuSFS:** [simonpunk/susfs4ksu](https://gitlab.com/simonpunk/susfs4ksu)
+- **BakaSU:** [Baka-SU/BakaSU](https://github.com/Baka-SU/BakaSU)
+
+---
+
+### ⚡ Installation Instructions
+Reboot device into fastboot / bootloader mode:
+\`\`\`bash
+adb reboot bootloader
+fastboot flash boot <chosen_boot_image>.img
+fastboot reboot
+\`\`\`
+
+---
+
+### 🛡️ SHA256 Checksums
+\`\`\`
+$(cat SHA256SUMS.txt)
+\`\`\`
+EOF
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd release_assets
+          gh release create "$TAG_NAME" \
+            --title "$RELEASE_TITLE" \
+            --notes-file "${GITHUB_WORKSPACE}/release_notes.md" \
+            *.img SHA256SUMS.txt
