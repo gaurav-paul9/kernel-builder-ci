@@ -115,7 +115,7 @@ jobs:
           echo "devicetrees_branch=$DT_BRANCH" >> $GITHUB_OUTPUT
 
   build:
-    name: Build ${{ matrix.variant }}
+    name: "Build ${{ matrix.variant }}"
     needs: prepare
     runs-on: ubuntu-latest
     strategy:
@@ -124,6 +124,9 @@ jobs:
         variant: ${{ fromJson(needs.prepare.outputs.matrix) }}
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Setup SWAP Space
         uses: pierotofy/set-swap-space@master
         with:
@@ -186,7 +189,7 @@ jobs:
           echo "==> Cloning Devicetrees repository: ${{ needs.prepare.outputs.devicetrees_repo }} (branch: ${{ needs.prepare.outputs.devicetrees_branch }})"
           git clone --depth=1 -b "${{ needs.prepare.outputs.devicetrees_branch }}" "${{ needs.prepare.outputs.devicetrees_repo }}.git" kernel-devicetrees || true
 
-      - name: Setup Root Solution (Variant: ${{ matrix.variant }})
+      - name: "Setup Root Solution (Variant: ${{ matrix.variant }})"
         run: |
           cd kernel
           VARIANT="${{ matrix.variant }}"
@@ -211,61 +214,24 @@ jobs:
               cp -r /tmp/susfs/kernel_patches/fs/* ./fs/
               cp -r /tmp/susfs/kernel_patches/include/linux/* ./include/linux/
 
-              echo "Resolving OnePlus SM8550 trace hook conflict in fs/namespace.c..."
-              python3 -c "
-with open('fs/namespace.c', 'r') as f:
-    c = f.read()
-t1 = '#include <linux/mnt_idmapping.h>'
-r1 = '''#include <linux/mnt_idmapping.h>
-#ifdef CONFIG_KSU_SUSFS
-#include <linux/susfs_def.h>
-#endif // #ifdef CONFIG_KSU_SUSFS'''
-t2 = '/* Maximum number of mounts in a mount namespace */'
-r2 = '''#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-extern bool susfs_is_current_ksu_domain(void);
-extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;
-
-#define CL_COPY_MNT_NS BIT(25) /* used by copy_mnt_ns() */
-#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-
-/* Maximum number of mounts in a mount namespace */'''
-if t1 in c and '#include <linux/susfs_def.h>' not in c:
-    c = c.replace(t1, r1, 1)
-if t2 in c and 'susfs_is_current_ksu_domain' not in c:
-    c = c.replace(t2, r2, 1)
-with open('fs/namespace.c', 'w') as f:
-    f.write(c)
-"
-
-              echo "Adapting susfs patch for GKI 5.15..."
-              python3 -c "
-with open('/tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch', 'r', encoding='utf-8', errors='ignore') as f:
-    p = f.read()
-idx = p.find('diff --git a/fs/namespace.c ')
-if idx != -1:
-    h1 = p.find('@@ -32,10 +32,20 @@', idx)
-    h2 = p.find('@@ -144,6 +154,10 @@', idx)
-    if h1 != -1 and h2 != -1:
-        p = p[:h1] + p[h2:]
-with open('susfs.patch', 'w', encoding='utf-8') as f:
-    f.write(p)
-"
+              echo "Adapting SuSFS patch for OnePlus SM8550..."
+              python3 "${GITHUB_WORKSPACE}/scripts/patch_susfs.py" /tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch susfs.patch
 
               echo "Applying SuSFS patch..."
               patch -p1 --fuzz=3 < susfs.patch
 
-              cat << 'EOF' >> arch/arm64/configs/gki_defconfig
-CONFIG_KSU_SUSFS=y
-CONFIG_KSU_SUSFS_SUS_PATH=y
-CONFIG_KSU_SUSFS_SUS_MOUNT=y
-CONFIG_KSU_SUSFS_SUS_KSTAT=y
-CONFIG_KSU_SUSFS_SUS_MAP=y
-CONFIG_KSU_SUSFS_SPOOF_UNAME=y
-CONFIG_KSU_SUSFS_ENABLE_LOG=y
-CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
-CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
-CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
-EOF
+              {
+                echo "CONFIG_KSU_SUSFS=y"
+                echo "CONFIG_KSU_SUSFS_SUS_PATH=y"
+                echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
+                echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y"
+                echo "CONFIG_KSU_SUSFS_SUS_MAP=y"
+                echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y"
+                echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y"
+                echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
+                echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y"
+                echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
+              } >> arch/arm64/configs/gki_defconfig
               ;;
 
             "resukisu-susfs")
@@ -277,61 +243,24 @@ EOF
               cp -r /tmp/susfs/kernel_patches/fs/* ./fs/
               cp -r /tmp/susfs/kernel_patches/include/linux/* ./include/linux/
 
-              echo "Resolving OnePlus SM8550 trace hook conflict in fs/namespace.c..."
-              python3 -c "
-with open('fs/namespace.c', 'r') as f:
-    c = f.read()
-t1 = '#include <linux/mnt_idmapping.h>'
-r1 = '''#include <linux/mnt_idmapping.h>
-#ifdef CONFIG_KSU_SUSFS
-#include <linux/susfs_def.h>
-#endif // #ifdef CONFIG_KSU_SUSFS'''
-t2 = '/* Maximum number of mounts in a mount namespace */'
-r2 = '''#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-extern bool susfs_is_current_ksu_domain(void);
-extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;
-
-#define CL_COPY_MNT_NS BIT(25) /* used by copy_mnt_ns() */
-#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-
-/* Maximum number of mounts in a mount namespace */'''
-if t1 in c and '#include <linux/susfs_def.h>' not in c:
-    c = c.replace(t1, r1, 1)
-if t2 in c and 'susfs_is_current_ksu_domain' not in c:
-    c = c.replace(t2, r2, 1)
-with open('fs/namespace.c', 'w') as f:
-    f.write(c)
-"
-
-              echo "Adapting susfs patch for GKI 5.15..."
-              python3 -c "
-with open('/tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch', 'r', encoding='utf-8', errors='ignore') as f:
-    p = f.read()
-idx = p.find('diff --git a/fs/namespace.c ')
-if idx != -1:
-    h1 = p.find('@@ -32,10 +32,20 @@', idx)
-    h2 = p.find('@@ -144,6 +154,10 @@', idx)
-    if h1 != -1 and h2 != -1:
-        p = p[:h1] + p[h2:]
-with open('susfs.patch', 'w', encoding='utf-8') as f:
-    f.write(p)
-"
+              echo "Adapting SuSFS patch for OnePlus SM8550..."
+              python3 "${GITHUB_WORKSPACE}/scripts/patch_susfs.py" /tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch susfs.patch
 
               echo "Applying SuSFS patch..."
               patch -p1 --fuzz=3 < susfs.patch
 
-              cat << 'EOF' >> arch/arm64/configs/gki_defconfig
-CONFIG_KSU_SUSFS=y
-CONFIG_KSU_SUSFS_SUS_PATH=y
-CONFIG_KSU_SUSFS_SUS_MOUNT=y
-CONFIG_KSU_SUSFS_SUS_KSTAT=y
-CONFIG_KSU_SUSFS_SUS_MAP=y
-CONFIG_KSU_SUSFS_SPOOF_UNAME=y
-CONFIG_KSU_SUSFS_ENABLE_LOG=y
-CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
-CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
-CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
-EOF
+              {
+                echo "CONFIG_KSU_SUSFS=y"
+                echo "CONFIG_KSU_SUSFS_SUS_PATH=y"
+                echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
+                echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y"
+                echo "CONFIG_KSU_SUSFS_SUS_MAP=y"
+                echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y"
+                echo "CONFIG_KSU_SUSFS_ENABLE_LOG=y"
+                echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
+                echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y"
+                echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
+              } >> arch/arm64/configs/gki_defconfig
               ;;
           esac
 
@@ -427,18 +356,18 @@ EOF
           cd ..
 
           cd repack
-          cat << EOF > metadata_${{ matrix.variant }}.env
-ROM=${{ needs.prepare.outputs.rom }}
-SUBLEVEL=${SUBLEVEL}
-KERNEL_SHA=${KERNEL_SHA}
-VARIANT=${{ matrix.variant }}
-TARGET_IMG=${{ steps.repack.outputs.target_img }}
-EOF
+          {
+            echo "ROM=${{ needs.prepare.outputs.rom }}"
+            echo "SUBLEVEL=${SUBLEVEL}"
+            echo "KERNEL_SHA=${KERNEL_SHA}"
+            echo "VARIANT=${{ matrix.variant }}"
+            echo "TARGET_IMG=${{ steps.repack.outputs.target_img }}"
+          } > "metadata_${{ matrix.variant }}.env"
 
       - name: Upload Boot Image Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bootimg-${{ matrix.variant }}
+          name: "bootimg-${{ matrix.variant }}"
           path: |
             repack/${{ steps.repack.outputs.target_img }}
             repack/${{ steps.repack.outputs.target_img }}.sha256
@@ -451,6 +380,9 @@ EOF
     permissions:
       contents: write
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Download Boot Image Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -470,7 +402,6 @@ EOF
           cat *.sha256 > SHA256SUMS.txt || true
           rm -f *.sha256
 
-          # Read sublevel from any metadata file found
           SUBLEVEL="211"
           if ls metadata_*.env 1> /dev/null 2>&1; then
             FIRST_META=$(ls metadata_*.env | head -n 1)
@@ -491,52 +422,19 @@ EOF
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
           echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
 
-          cat << EOF > "${GITHUB_WORKSPACE}/release_notes.md"
-# ${ROM} OnePlus 12R (Aston / SM8550) Kernel Release
-
-- **ROM:** ${ROM}
-- **Device:** OnePlus 12R (Aston) [SM8550]
-- **Linux Kernel Version:** 5.15.${SUBLEVEL}
-- **Build Timestamp:** ${DATE_DISPLAY}
-- **AOSP Clang Version:** ${{ needs.prepare.outputs.clang_version }}
-
----
-
-### 📦 Available Boot Images
-- \`boot.img\` - Stock / Vanilla ROM kernel (packed into base ROM boot.img)
-- \`boot-ksun.img\` - KernelSU-Next (dev branch)
-- \`boot-ksun-susfs.img\` - KernelSU-Next (dev-susfs) + SuSFS v1.5.x
-- \`boot-resuki-susfs.img\` - BakaSU (ReSukiSU) + SuSFS v1.5.x
-
----
-
-### 🔗 Source References
-- **Kernel Tree:** [${{ needs.prepare.outputs.kernel_repo }}](${{ needs.prepare.outputs.kernel_repo }}) (\`${{ needs.prepare.outputs.kernel_branch }}\`)
-- **Modules Tree:** [${{ needs.prepare.outputs.modules_repo }}](${{ needs.prepare.outputs.modules_repo }}) (\`${{ needs.prepare.outputs.modules_branch }}\`)
-- **Devicetrees:** [${{ needs.prepare.outputs.devicetrees_repo }}](${{ needs.prepare.outputs.devicetrees_repo }}) (\`${{ needs.prepare.outputs.devicetrees_branch }}\`)
-- **Base boot.img Source:** [${{ needs.prepare.outputs.base_boot_url }}](${{ needs.prepare.outputs.base_boot_url }})
-- **KernelSU-Next:** [KernelSU-Next/KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next)
-- **KernelSU-Next (SuSFS):** [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next/tree/dev-susfs)
-- **SuSFS:** [simonpunk/susfs4ksu](https://gitlab.com/simonpunk/susfs4ksu)
-- **BakaSU:** [Baka-SU/BakaSU](https://github.com/Baka-SU/BakaSU)
-
----
-
-### ⚡ Installation Instructions
-Reboot device into fastboot / bootloader mode:
-\`\`\`bash
-adb reboot bootloader
-fastboot flash boot <chosen_boot_image>.img
-fastboot reboot
-\`\`\`
-
----
-
-### 🛡️ SHA256 Checksums
-\`\`\`
-$(cat SHA256SUMS.txt)
-\`\`\`
-EOF
+          python3 "${GITHUB_WORKSPACE}/scripts/generate_release_notes.py" \
+            "${ROM}" \
+            "${SUBLEVEL}" \
+            "${DATE_DISPLAY}" \
+            "${{ needs.prepare.outputs.clang_version }}" \
+            "${{ needs.prepare.outputs.kernel_repo }}" \
+            "${{ needs.prepare.outputs.kernel_branch }}" \
+            "${{ needs.prepare.outputs.modules_repo }}" \
+            "${{ needs.prepare.outputs.modules_branch }}" \
+            "${{ needs.prepare.outputs.devicetrees_repo }}" \
+            "${{ needs.prepare.outputs.devicetrees_branch }}" \
+            "${{ needs.prepare.outputs.base_boot_url }}" \
+            "${GITHUB_WORKSPACE}/release_notes.md"
 
       - name: Publish GitHub Release
         env:
