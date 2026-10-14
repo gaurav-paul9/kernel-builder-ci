@@ -146,6 +146,7 @@ jobs:
             cpio \
             zip \
             unzip \
+            patch \
             gcc-aarch64-linux-gnu
 
       - name: Download AOSP Clang
@@ -202,15 +203,56 @@ jobs:
               ;;
 
             "ksun-susfs")
-              echo "Setting up KernelSU-Next (pershoot dev-susfs) + SuSFS..."
+              echo "Setting up KernelSU-Next (pershoot dev-susfs)..."
               curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
 
               echo "Cloning simonpunk/susfs4ksu (gki-android14-5.15)..."
               git clone --depth=1 -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git /tmp/susfs
-              cp /tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch ./susfs.patch
               cp -r /tmp/susfs/kernel_patches/fs/* ./fs/
               cp -r /tmp/susfs/kernel_patches/include/linux/* ./include/linux/
-              patch -p1 < ./susfs.patch
+
+              echo "Resolving OnePlus SM8550 trace hook conflict in fs/namespace.c..."
+              python3 -c "
+with open('fs/namespace.c', 'r') as f:
+    c = f.read()
+t1 = '#include <linux/mnt_idmapping.h>'
+r1 = '''#include <linux/mnt_idmapping.h>
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/susfs_def.h>
+#endif // #ifdef CONFIG_KSU_SUSFS'''
+t2 = '/* Maximum number of mounts in a mount namespace */'
+r2 = '''#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+extern bool susfs_is_current_ksu_domain(void);
+extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;
+
+#define CL_COPY_MNT_NS BIT(25) /* used by copy_mnt_ns() */
+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+
+/* Maximum number of mounts in a mount namespace */'''
+if t1 in c and '#include <linux/susfs_def.h>' not in c:
+    c = c.replace(t1, r1, 1)
+if t2 in c and 'susfs_is_current_ksu_domain' not in c:
+    c = c.replace(t2, r2, 1)
+with open('fs/namespace.c', 'w') as f:
+    f.write(c)
+"
+
+              echo "Adapting susfs patch for GKI 5.15..."
+              python3 -c "
+with open('/tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch', 'r', encoding='utf-8', errors='ignore') as f:
+    p = f.read()
+idx = p.find('diff --git a/fs/namespace.c ')
+if idx != -1:
+    h1 = p.find('@@ -32,10 +32,20 @@', idx)
+    h2 = p.find('@@ -144,6 +154,10 @@', idx)
+    if h1 != -1 and h2 != -1:
+        p = p[:h1] + p[h2:]
+with open('susfs.patch', 'w', encoding='utf-8') as f:
+    f.write(p)
+"
+
+              echo "Applying SuSFS patch..."
+              patch -p1 --fuzz=3 < susfs.patch
 
               cat << 'EOF' >> arch/arm64/configs/gki_defconfig
 CONFIG_KSU_SUSFS=y
@@ -227,15 +269,56 @@ EOF
               ;;
 
             "resukisu-susfs")
-              echo "Setting up BakaSU (ReSukiSU) + SuSFS..."
+              echo "Setting up BakaSU (ReSukiSU)..."
               curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/refs/heads/main/kernel/setup.sh" | bash -s main
 
               echo "Cloning simonpunk/susfs4ksu (gki-android14-5.15)..."
               git clone --depth=1 -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git /tmp/susfs
-              cp /tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch ./susfs.patch
               cp -r /tmp/susfs/kernel_patches/fs/* ./fs/
               cp -r /tmp/susfs/kernel_patches/include/linux/* ./include/linux/
-              patch -p1 < ./susfs.patch
+
+              echo "Resolving OnePlus SM8550 trace hook conflict in fs/namespace.c..."
+              python3 -c "
+with open('fs/namespace.c', 'r') as f:
+    c = f.read()
+t1 = '#include <linux/mnt_idmapping.h>'
+r1 = '''#include <linux/mnt_idmapping.h>
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/susfs_def.h>
+#endif // #ifdef CONFIG_KSU_SUSFS'''
+t2 = '/* Maximum number of mounts in a mount namespace */'
+r2 = '''#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+extern bool susfs_is_current_ksu_domain(void);
+extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;
+
+#define CL_COPY_MNT_NS BIT(25) /* used by copy_mnt_ns() */
+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+
+/* Maximum number of mounts in a mount namespace */'''
+if t1 in c and '#include <linux/susfs_def.h>' not in c:
+    c = c.replace(t1, r1, 1)
+if t2 in c and 'susfs_is_current_ksu_domain' not in c:
+    c = c.replace(t2, r2, 1)
+with open('fs/namespace.c', 'w') as f:
+    f.write(c)
+"
+
+              echo "Adapting susfs patch for GKI 5.15..."
+              python3 -c "
+with open('/tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch', 'r', encoding='utf-8', errors='ignore') as f:
+    p = f.read()
+idx = p.find('diff --git a/fs/namespace.c ')
+if idx != -1:
+    h1 = p.find('@@ -32,10 +32,20 @@', idx)
+    h2 = p.find('@@ -144,6 +154,10 @@', idx)
+    if h1 != -1 and h2 != -1:
+        p = p[:h1] + p[h2:]
+with open('susfs.patch', 'w', encoding='utf-8') as f:
+    f.write(p)
+"
+
+              echo "Applying SuSFS patch..."
+              patch -p1 --fuzz=3 < susfs.patch
 
               cat << 'EOF' >> arch/arm64/configs/gki_defconfig
 CONFIG_KSU_SUSFS=y
