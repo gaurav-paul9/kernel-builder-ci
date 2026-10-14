@@ -3,8 +3,8 @@ import sys
 import os
 
 def main():
-    if len(sys.argv) < 12:
-        print("Usage: generate_release_notes.py <rom> <sublevel> <date_display> <clang_ver> <k_repo> <k_branch> <m_repo> <m_branch> <dt_repo> <dt_branch> <base_url> [out_file]")
+    if len(sys.argv) < 10:
+        print("Usage: generate_release_notes.py <rom> <sublevel> <date_display> <clang_ver> <k_repo> <k_branch> <m_repo> <m_branch> <base_url> [out_file]")
         sys.exit(1)
 
     rom = sys.argv[1]
@@ -15,10 +15,8 @@ def main():
     k_branch = sys.argv[6]
     m_repo = sys.argv[7]
     m_branch = sys.argv[8]
-    dt_repo = sys.argv[9]
-    dt_branch = sys.argv[10]
-    base_url = sys.argv[11]
-    out_file = sys.argv[12] if len(sys.argv) > 12 else "release_notes.md"
+    base_url = sys.argv[9]
+    out_file = sys.argv[10] if len(sys.argv) > 10 else "release_notes.md"
 
     checksums = ""
     if os.path.exists("SHA256SUMS.txt"):
@@ -46,7 +44,6 @@ def main():
 ### 🔗 Source References
 - **Kernel Tree:** [{k_repo}]({k_repo}) (`{k_branch}`)
 - **Modules Tree:** [{m_repo}]({m_repo}) (`{m_branch}`)
-- **Devicetrees:** [{dt_repo}]({dt_repo}) (`{dt_branch}`)
 - **Base boot.img Source:** [{base_url}]({base_url})
 - **KernelSU-Next:** [KernelSU-Next/KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next)
 - **KernelSU-Next (SuSFS):** [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next/tree/dev-susfs)

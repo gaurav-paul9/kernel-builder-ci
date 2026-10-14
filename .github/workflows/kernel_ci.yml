@@ -61,8 +61,6 @@ jobs:
       kernel_branch: ${{ steps.set-urls.outputs.kernel_branch }}
       modules_repo: ${{ steps.set-urls.outputs.modules_repo }}
       modules_branch: ${{ steps.set-urls.outputs.modules_branch }}
-      devicetrees_repo: ${{ steps.set-urls.outputs.devicetrees_repo }}
-      devicetrees_branch: ${{ steps.set-urls.outputs.devicetrees_branch }}
     steps:
       - name: Resolve Matrix
         id: set-matrix
@@ -87,16 +85,12 @@ jobs:
             K_BRANCH="seventeen"
             M_REPO="https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550-modules"
             M_BRANCH="seventeen"
-            DT_REPO="https://github.com/LineageOS/android_kernel_oneplus_sm8550-devicetrees"
-            DT_BRANCH="lineage-24.0"
           else
             BOOT_URL="https://files.gauravbuilds.xyz/release/aston/Lunaris/imgs/boot.img"
             K_REPO="https://github.com/OnePlus12R-development/android_kernel_oneplus_sm8550"
             K_BRANCH="seventeen"
             M_REPO="https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550-modules"
             M_BRANCH="lunaris"
-            DT_REPO="https://github.com/OnePlus12R-development/android_kernel_oneplus_sm8550-devicetrees"
-            DT_BRANCH="seventeen"
           fi
 
           if [ -n "$CUSTOM_BOOT_URL" ]; then
@@ -111,8 +105,6 @@ jobs:
           echo "kernel_branch=$K_BRANCH" >> $GITHUB_OUTPUT
           echo "modules_repo=$M_REPO" >> $GITHUB_OUTPUT
           echo "modules_branch=$M_BRANCH" >> $GITHUB_OUTPUT
-          echo "devicetrees_repo=$DT_REPO" >> $GITHUB_OUTPUT
-          echo "devicetrees_branch=$DT_BRANCH" >> $GITHUB_OUTPUT
 
   build:
     name: "Build ${{ matrix.variant }}"
@@ -178,20 +170,27 @@ jobs:
           tar -xf "$(basename "$CLANG_URL")" -C toolchains/${CLANG_VER}
           rm -f "$(basename "$CLANG_URL")"
 
-      - name: Clone Kernel, Modules, and Devicetrees
+      - name: Clone Kernel and Modules
         run: |
-          echo "==> Cloning Kernel repository: ${{ needs.prepare.outputs.kernel_repo }} (branch: ${{ needs.prepare.outputs.kernel_branch }})"
-          git clone --depth=1 -b "${{ needs.prepare.outputs.kernel_branch }}" "${{ needs.prepare.outputs.kernel_repo }}.git" kernel
+          echo "==> Cloning Kernel repository into sm8550: ${{ needs.prepare.outputs.kernel_repo }} (branch: ${{ needs.prepare.outputs.kernel_branch }})"
+          git clone --depth=1 -b "${{ needs.prepare.outputs.kernel_branch }}" "${{ needs.prepare.outputs.kernel_repo }}.git" sm8550
 
-          echo "==> Cloning Modules repository: ${{ needs.prepare.outputs.modules_repo }} (branch: ${{ needs.prepare.outputs.modules_branch }})"
-          git clone --depth=1 -b "${{ needs.prepare.outputs.modules_branch }}" "${{ needs.prepare.outputs.modules_repo }}.git" kernel-modules || true
+          echo "==> Cloning Modules repository into sm8550-modules: ${{ needs.prepare.outputs.modules_repo }} (branch: ${{ needs.prepare.outputs.modules_branch }})"
+          git clone --depth=1 -b "${{ needs.prepare.outputs.modules_branch }}" "${{ needs.prepare.outputs.modules_repo }}.git" sm8550-modules
 
-          echo "==> Cloning Devicetrees repository: ${{ needs.prepare.outputs.devicetrees_repo }} (branch: ${{ needs.prepare.outputs.devicetrees_branch }})"
-          git clone --depth=1 -b "${{ needs.prepare.outputs.devicetrees_branch }}" "${{ needs.prepare.outputs.devicetrees_repo }}.git" kernel-devicetrees || true
+          echo "==> Verifying and setting up oplus_cpu thermal symlinks..."
+          mkdir -p sm8550/kernel/oplus_cpu
+          ln -sfn "${GITHUB_WORKSPACE}/sm8550-modules/oplus/kernel/cpu/thermal" sm8550/kernel/oplus_cpu/thermal
+
+          if [ ! -f sm8550/kernel/oplus_cpu/thermal/Kconfig ]; then
+            echo "ERROR: sm8550/kernel/oplus_cpu/thermal/Kconfig does not exist!"
+            exit 1
+          fi
+          echo "==> Thermal Kconfig verified OK!"
 
       - name: "Setup Root Solution (Variant: ${{ matrix.variant }})"
         run: |
-          cd kernel
+          cd sm8550
           VARIANT="${{ matrix.variant }}"
           echo "VARIANT=$VARIANT" >> $GITHUB_ENV
 
@@ -273,7 +272,7 @@ jobs:
           export LLVM=1
           export LLVM_IAS=1
 
-          cd kernel
+          cd sm8550
           touch .scmversion
 
           echo "==> Configuring Kernel Defconfigs..."
@@ -331,7 +330,7 @@ jobs:
           /tmp/magiskboot unpack base_boot.img
 
           echo "==> Replacing kernel Image with compiled kernel..."
-          cp ../kernel/out/arch/arm64/boot/Image kernel
+          cp ../sm8550/out/arch/arm64/boot/Image kernel
 
           echo "==> Repacking boot.img into $TARGET_IMG..."
           /tmp/magiskboot repack base_boot.img "$TARGET_IMG"
@@ -350,7 +349,7 @@ jobs:
 
       - name: Record Build Metadata
         run: |
-          cd kernel
+          cd sm8550
           SUBLEVEL=$(grep "^SUBLEVEL =" Makefile | awk '{print $3}')
           KERNEL_SHA=$(git rev-parse --short HEAD)
           cd ..
@@ -431,8 +430,6 @@ jobs:
             "${{ needs.prepare.outputs.kernel_branch }}" \
             "${{ needs.prepare.outputs.modules_repo }}" \
             "${{ needs.prepare.outputs.modules_branch }}" \
-            "${{ needs.prepare.outputs.devicetrees_repo }}" \
-            "${{ needs.prepare.outputs.devicetrees_branch }}" \
             "${{ needs.prepare.outputs.base_boot_url }}" \
             "${GITHUB_WORKSPACE}/release_notes.md"
 
