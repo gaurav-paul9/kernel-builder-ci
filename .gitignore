@@ -17,3 +17,5 @@ SHA256SUMS.txt
 options.txt
 release_notes.md
 release_notes.txt
+__pycache__/
+*.pyc

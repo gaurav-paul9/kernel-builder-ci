@@ -250,13 +250,8 @@ jobs:
               echo "Setting up BakaSU (ReSukiSU)..."
               curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/refs/heads/main/kernel/setup.sh" | bash -s main
 
-              echo "Allowing SuSFS build in BakaSU..."
-              sed -i '/Please wait susfs update/d' KernelSU/kernel/tools/susfs_compat.mk 2>/dev/null || true
-              sed -i '/Please wait susfs update/d' drivers/kernelsu/tools/susfs_compat.mk 2>/dev/null || true
-              sed -i '/has NOT update with latest KernelSU source/d' KernelSU/kernel/tools/susfs_compat.mk 2>/dev/null || true
-              sed -i '/has NOT update with latest KernelSU source/d' drivers/kernelsu/tools/susfs_compat.mk 2>/dev/null || true
-              sed -i '/Please wait simonpunk update/d' KernelSU/kernel/tools/susfs_compat.mk 2>/dev/null || true
-              sed -i '/Please wait simonpunk update/d' drivers/kernelsu/tools/susfs_compat.mk 2>/dev/null || true
+              echo "Adapting BakaSU for SuSFS (fake_state & susfs_compat)..."
+              python3 "${GITHUB_WORKSPACE}/scripts/patch_bakasu.py" .
 
               echo "Cloning simonpunk/susfs4ksu (gki-android14-5.15)..."
               git clone --depth=1 -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git /tmp/susfs
