@@ -367,7 +367,44 @@ jobs:
         run: |
           cd sm8550
           SUBLEVEL=$(grep "^SUBLEVEL =" Makefile | awk '{print $3}')
-          KERNEL_SHA=$(git rev-parse --short HEAD)
+          KERNEL_SHA=$(git rev-parse HEAD)
+          KERNEL_SHORT_SHA=$(git rev-parse --short HEAD)
+          cd ../sm8550-modules
+          MODULES_SHA=$(git rev-parse HEAD)
+          MODULES_SHORT_SHA=$(git rev-parse --short HEAD)
+          cd ../sm8550
+
+          VARIANT="${{ matrix.variant }}"
+          ROOT_DESC="Vanilla / Clean Stock ROM Kernel"
+          ROOT_VERSION=""
+          SUSFS_VERSION=""
+
+          case "$VARIANT" in
+            "vanilla")
+              ROOT_DESC="Clean Stock ROM Kernel (Repacked base ROM boot.img with compiled Image)"
+              ;;
+            "ksun")
+              KSU_HEAD=$(cd drivers/kernelsu && git rev-parse --short HEAD 2>/dev/null || echo "")
+              ROOT_DESC="KernelSU-Next (dev@${KSU_HEAD})"
+              ROOT_VERSION="${KSU_HEAD}"
+              ;;
+            "ksun-susfs")
+              KSU_HEAD=$(cd drivers/kernelsu && git rev-parse --short HEAD 2>/dev/null || echo "")
+              SUSFS_V=$(grep -E '^#define SUSFS_VERSION' include/linux/susfs.h 2>/dev/null | cut -d'"' -f2 || echo "v1.5.5")
+              SUSFS_H=$(cd /tmp/susfs && git rev-parse --short HEAD 2>/dev/null || echo "")
+              ROOT_DESC="KernelSU-Next (dev-susfs@${KSU_HEAD}) + SuSFS ${SUSFS_V} (@${SUSFS_H})"
+              ROOT_VERSION="${KSU_HEAD}"
+              SUSFS_VERSION="${SUSFS_V} (@${SUSFS_H})"
+              ;;
+            "resukisu-susfs")
+              KSU_HEAD=$(cd drivers/kernelsu && git rev-parse --short HEAD 2>/dev/null || echo "")
+              SUSFS_V=$(grep -E '^#define SUSFS_VERSION' include/linux/susfs.h 2>/dev/null | cut -d'"' -f2 || echo "v1.5.5")
+              SUSFS_H=$(cd /tmp/susfs && git rev-parse --short HEAD 2>/dev/null || echo "")
+              ROOT_DESC="BakaSU (main@${KSU_HEAD}) + SuSFS ${SUSFS_V} (@${SUSFS_H})"
+              ROOT_VERSION="${KSU_HEAD}"
+              SUSFS_VERSION="${SUSFS_V} (@${SUSFS_H})"
+              ;;
+          esac
           cd ..
 
           cd repack
@@ -375,9 +412,17 @@ jobs:
             echo "ROM=${{ needs.prepare.outputs.rom }}"
             echo "SUBLEVEL=${SUBLEVEL}"
             echo "KERNEL_SHA=${KERNEL_SHA}"
-            echo "VARIANT=${{ matrix.variant }}"
+            echo "KERNEL_SHORT_SHA=${KERNEL_SHORT_SHA}"
+            echo "MODULES_SHA=${MODULES_SHA}"
+            echo "MODULES_SHORT_SHA=${MODULES_SHORT_SHA}"
+            echo "KERNEL_REPO=${{ needs.prepare.outputs.kernel_repo }}"
+            echo "MODULES_REPO=${{ needs.prepare.outputs.modules_repo }}"
+            echo "VARIANT=${VARIANT}"
             echo "TARGET_IMG=${{ steps.repack.outputs.target_img }}"
-          } > "metadata_${{ matrix.variant }}.env"
+            echo "ROOT_DESC=${ROOT_DESC}"
+            echo "ROOT_VERSION=${ROOT_VERSION}"
+            echo "SUSFS_VERSION=${SUSFS_VERSION}"
+          } > "metadata_${VARIANT}.env"
 
       - name: Upload Boot Image Artifact
         uses: actions/upload-artifact@v4
@@ -424,18 +469,19 @@ jobs:
             if [ -n "$SUBLEVEL_VAL" ]; then
               SUBLEVEL="$SUBLEVEL_VAL"
             fi
-            rm -f metadata_*.env
           fi
 
           ROM="${{ needs.prepare.outputs.rom }}"
-          DATE_TAG=$(date -u +"%Y%m%d_%H%M")
-          DATE_DISPLAY=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          DATE_TAG=$(TZ='Asia/Kolkata' date +"%Y%m%d_%H%M")
+          DATE_DISPLAY=$(TZ='Asia/Kolkata' date +"%Y-%m-%d %I:%M %p IST")
 
           TAG_NAME="${ROM}_Aston-v5.15.${SUBLEVEL}-${DATE_TAG}"
-          RELEASE_TITLE="${ROM} OnePlus 12R (Aston) Kernel - $(date -u +"%Y-%m-%d %H:%M") UTC"
+          RELEASE_TITLE="${ROM} OnePlus 12R (Aston) Kernel - $(TZ='Asia/Kolkata' date +"%Y-%m-%d %I:%M %p IST")"
 
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
           echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
+          echo "DATE_DISPLAY=$DATE_DISPLAY" >> $GITHUB_ENV
+          echo "SUBLEVEL=$SUBLEVEL" >> $GITHUB_ENV
 
           python3 "${GITHUB_WORKSPACE}/scripts/generate_release_notes.py" \
             "${ROM}" \
@@ -447,7 +493,8 @@ jobs:
             "${{ needs.prepare.outputs.modules_repo }}" \
             "${{ needs.prepare.outputs.modules_branch }}" \
             "${{ needs.prepare.outputs.base_boot_url }}" \
-            "${GITHUB_WORKSPACE}/release_notes.md"
+            "${GITHUB_WORKSPACE}/release_notes.md" \
+            "${GITHUB_WORKSPACE}/release_assets"
 
       - name: Publish GitHub Release
         env:
@@ -458,3 +505,16 @@ jobs:
             --title "$RELEASE_TITLE" \
             --notes-file "${GITHUB_WORKSPACE}/release_notes.md" \
             *.img SHA256SUMS.txt
+
+      - name: Notify Telegram Channel
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python3 "${GITHUB_WORKSPACE}/scripts/notify_telegram.py" \
+            "${{ needs.prepare.outputs.rom }}" \
+            "$SUBLEVEL" \
+            "$TAG_NAME" \
+            "$DATE_DISPLAY" \
+            "${{ github.repository }}" \
+            "${GITHUB_WORKSPACE}/release_assets"
