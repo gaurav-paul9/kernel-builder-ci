@@ -4,8 +4,18 @@ import os
 import json
 import glob
 import urllib.request
-import urllib.parse
-from scripts.generate_release_notes import parse_env_file
+def parse_env_file(filepath):
+    data = {}
+    if not os.path.isfile(filepath):
+        return data
+    with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            data[k.strip()] = v.strip().strip('"').strip("'")
+    return data
 
 def main():
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()

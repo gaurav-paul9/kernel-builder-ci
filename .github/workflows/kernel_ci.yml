@@ -517,4 +517,4 @@ jobs:
             "$TAG_NAME" \
             "$DATE_DISPLAY" \
             "${{ github.repository }}" \
-            "${GITHUB_WORKSPACE}/release_assets"
+            "${GITHUB_WORKSPACE}/release_assets" || echo "==> Telegram notification completed with warning or skipped."
