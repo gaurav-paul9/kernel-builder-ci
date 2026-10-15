@@ -208,6 +208,16 @@ jobs:
               echo "Setting up KernelSU-Next (pershoot dev-susfs)..."
               curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
 
+              echo "Disabling Samsung KDP / RKP / DEFEX (not applicable for OnePlus)..."
+              sed -i 's/default y/default n/g' drivers/kernelsu/Kconfig 2>/dev/null || true
+              sed -i 's/default y/default n/g' KernelSU/kernel/Kconfig 2>/dev/null || true
+              if [ -f drivers/kernelsu/compat/samsung_kdp.c ]; then
+                sed -i 's/#ifdef CONFIG_KSU_SAMSUNG_KDP/#if 0/g' drivers/kernelsu/compat/samsung_kdp.c
+              fi
+              if [ -f KernelSU/kernel/compat/samsung_kdp.c ]; then
+                sed -i 's/#ifdef CONFIG_KSU_SAMSUNG_KDP/#if 0/g' KernelSU/kernel/compat/samsung_kdp.c
+              fi
+
               echo "Cloning simonpunk/susfs4ksu (gki-android14-5.15)..."
               git clone --depth=1 -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git /tmp/susfs
               cp -r /tmp/susfs/kernel_patches/fs/* ./fs/
@@ -220,6 +230,9 @@ jobs:
               patch -p1 --fuzz=3 < susfs.patch
 
               {
+                echo "CONFIG_KSU_SAMSUNG_KDP=n"
+                echo "CONFIG_KSU_SAMSUNG_RKP=n"
+                echo "CONFIG_KSU_SAMSUNG_DEFEX=n"
                 echo "CONFIG_KSU_SUSFS=y"
                 echo "CONFIG_KSU_SUSFS_SUS_PATH=y"
                 echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
@@ -236,6 +249,14 @@ jobs:
             "resukisu-susfs")
               echo "Setting up BakaSU (ReSukiSU)..."
               curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/refs/heads/main/kernel/setup.sh" | bash -s main
+
+              echo "Allowing SuSFS build in BakaSU..."
+              sed -i '/Please wait susfs update/d' KernelSU/kernel/tools/susfs_compat.mk 2>/dev/null || true
+              sed -i '/Please wait susfs update/d' drivers/kernelsu/tools/susfs_compat.mk 2>/dev/null || true
+              sed -i '/has NOT update with latest KernelSU source/d' KernelSU/kernel/tools/susfs_compat.mk 2>/dev/null || true
+              sed -i '/has NOT update with latest KernelSU source/d' drivers/kernelsu/tools/susfs_compat.mk 2>/dev/null || true
+              sed -i '/Please wait simonpunk update/d' KernelSU/kernel/tools/susfs_compat.mk 2>/dev/null || true
+              sed -i '/Please wait simonpunk update/d' drivers/kernelsu/tools/susfs_compat.mk 2>/dev/null || true
 
               echo "Cloning simonpunk/susfs4ksu (gki-android14-5.15)..."
               git clone --depth=1 -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git /tmp/susfs
