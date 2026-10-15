@@ -62,14 +62,26 @@ fastboot reboot
 | :--- | :--- | :--- |
 | **Yaap Kernel** | [gaurav-paul9/android_kernel_oneplus_sm8550](https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550) | `seventeen` |
 | **Yaap Modules** | [gaurav-paul9/android_kernel_oneplus_sm8550-modules](https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550-modules) | `seventeen` |
-| **Yaap Devicetrees** | [LineageOS/android_kernel_oneplus_sm8550-devicetrees](https://github.com/LineageOS/android_kernel_oneplus_sm8550-devicetrees) | `lineage-24.0` |
 | **Yaap Base boot.img** | [files.gauravbuilds.xyz/release/aston/Yaap/imgs-17/boot.img](https://files.gauravbuilds.xyz/release/aston/Yaap/imgs-17/boot.img) | — |
 | **Lunaris Kernel** | [OnePlus12R-development/android_kernel_oneplus_sm8550](https://github.com/OnePlus12R-development/android_kernel_oneplus_sm8550) | `seventeen` |
 | **Lunaris Modules** | [gaurav-paul9/android_kernel_oneplus_sm8550-modules](https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550-modules) | `lunaris` |
-| **Lunaris Devicetrees** | [OnePlus12R-development/android_kernel_oneplus_sm8550-devicetrees](https://github.com/OnePlus12R-development/android_kernel_oneplus_sm8550-devicetrees) | `seventeen` |
 | **Lunaris Base boot.img**| [files.gauravbuilds.xyz/release/aston/Lunaris/imgs/boot.img](https://files.gauravbuilds.xyz/release/aston/Lunaris/imgs/boot.img) | — |
 | **KernelSU-Next** | [KernelSU-Next/KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) | `dev` |
 | **KernelSU-Next (SuSFS)**| [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next) | `dev-susfs` |
 | **SuSFS** | [simonpunk/susfs4ksu](https://gitlab.com/simonpunk/susfs4ksu) | `gki-android14-5.15` |
 | **BakaSU** | [Baka-SU/BakaSU](https://github.com/Baka-SU/BakaSU) | `main` |
 | **Magiskboot** | [topjohnwu/Magisk](https://github.com/topjohnwu/Magisk) | `v28.1` |
+
+---
+
+## 📢 Telegram Channel Auto-Posting Setup
+
+The workflow includes automated release broadcasting to a Telegram channel upon successful completion:
+
+1. Create a bot using [@BotFather](https://t.me/BotFather) on Telegram and copy the Bot Token.
+2. Create your Telegram Channel / Group and add your bot as an **Administrator** with "Post Messages" permission.
+3. In this GitHub repository, navigate to **Settings** $\rightarrow$ **Secrets and variables** $\rightarrow$ **Actions** and add two Repository Secrets:
+   - `TELEGRAM_BOT_TOKEN`: The token from BotFather (e.g., `123456789:ABCdefGHI...`)
+   - `TELEGRAM_CHAT_ID`: The channel ID (e.g., `@your_channel_name` or numeric `-100xxxxxxxxxx`)
+4. Subsequent builds will automatically publish an announcement with release notes, commit SHAs, and download links directly to your channel!
+
