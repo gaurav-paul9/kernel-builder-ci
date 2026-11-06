@@ -91,6 +91,25 @@ def patch_bakasu(kernel_dir):
                     f.write(content)
                 print(f"[patch_bakasu] Injected fake_state definition and hook into {c_path}")
 
+    # 5. Patch Kconfig to support KSU_SUSFS_PRIORITY_UID_FILTER
+    for kc_rel in ["KernelSU/kernel/Kconfig", "drivers/kernelsu/Kconfig"]:
+        kc_path = os.path.join(kernel_dir, kc_rel)
+        if os.path.isfile(kc_path):
+            with open(kc_path, "r", encoding="utf-8", errors="ignore") as f:
+                kc_content = f.read()
+            if "KSU_SUSFS_PRIORITY_UID_FILTER" not in kc_content:
+                kc_content += """
+config KSU_SUSFS_PRIORITY_UID_FILTER
+	bool "Enable to allow adding user-defined uids that will be hidden from getpriority/setpriority/ioprio_get/ioprio_set syscall"
+	depends on KSU_SUSFS
+	default y
+	help
+	  - Allow hiding user-defined uids from syscalls.
+"""
+                with open(kc_path, "w", encoding="utf-8") as f:
+                    f.write(kc_content)
+                print(f"[patch_bakasu] Added KSU_SUSFS_PRIORITY_UID_FILTER to {kc_path}")
+
 if __name__ == "__main__":
     target_dir = sys.argv[1] if len(sys.argv) > 1 else "."
     patch_bakasu(target_dir)
