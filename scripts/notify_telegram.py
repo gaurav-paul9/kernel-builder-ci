@@ -77,8 +77,8 @@ def main():
     boot_items = [
         ("vanilla", "boot.img", "Vanilla / Clean Stock ROM"),
         ("ksun", "boot-ksun.img", "KernelSU-Next (dev)"),
-        ("ksun-susfs", "boot-ksun-susfs.img", "KernelSU-Next (dev-susfs) + SuSFS v1.5.5"),
-        ("resukisu-susfs", "boot-resuki-susfs.img", "BakaSU (ReSukiSU) + SuSFS v1.5.5")
+        ("ksun-susfs", "boot-ksun-susfs.img", "KernelSU-Next (dev-susfs) + SuSFS v1.5.5 (gki-android13-5.15)"),
+        ("resukisu-susfs", "boot-resuki-susfs.img", "BakaSU (ReSukiSU) + SuSFS v1.5.5 (gki-android13-5.15)")
     ]
 
     for var, img, def_desc in boot_items:

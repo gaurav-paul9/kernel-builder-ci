@@ -231,13 +231,13 @@ jobs:
                 sed -i 's/#ifdef CONFIG_KSU_SAMSUNG_KDP/#if 0/g' KernelSU/kernel/compat/samsung_kdp.c
               fi
 
-              echo "Cloning simonpunk/susfs4ksu (gki-android14-5.15)..."
-              git clone --depth=1 -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git /tmp/susfs
+              echo "Cloning simonpunk/susfs4ksu (gki-android13-5.15)..."
+              git clone --depth=1 -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git /tmp/susfs
               cp -r /tmp/susfs/kernel_patches/fs/* ./fs/
               cp -r /tmp/susfs/kernel_patches/include/linux/* ./include/linux/
 
               echo "Adapting SuSFS patch for OnePlus SM8550..."
-              python3 "${GITHUB_WORKSPACE}/scripts/patch_susfs.py" /tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch susfs.patch
+              python3 "${GITHUB_WORKSPACE}/scripts/patch_susfs.py" /tmp/susfs/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch susfs.patch
 
               echo "Applying SuSFS patch..."
               patch -p1 --fuzz=3 < susfs.patch
@@ -262,13 +262,13 @@ jobs:
               echo "Setting up BakaSU (ReSukiSU)..."
               curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/refs/heads/main/kernel/setup.sh" | bash -s main
 
-              echo "Cloning simonpunk/susfs4ksu (gki-android14-5.15)..."
-              git clone --depth=1 -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git /tmp/susfs
+              echo "Cloning simonpunk/susfs4ksu (gki-android13-5.15)..."
+              git clone --depth=1 -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git /tmp/susfs
               cp -r /tmp/susfs/kernel_patches/fs/* ./fs/
               cp -r /tmp/susfs/kernel_patches/include/linux/* ./include/linux/
 
               echo "Adapting SuSFS patch for OnePlus SM8550..."
-              python3 "${GITHUB_WORKSPACE}/scripts/patch_susfs.py" /tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch susfs.patch
+              python3 "${GITHUB_WORKSPACE}/scripts/patch_susfs.py" /tmp/susfs/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch susfs.patch
 
               echo "Applying SuSFS patch..."
               patch -p1 --fuzz=3 < susfs.patch

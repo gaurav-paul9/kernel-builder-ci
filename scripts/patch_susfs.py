@@ -44,7 +44,7 @@ extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;
         print("==> Added __maybe_unused to susfs cred helpers in fs/susfs.c")
 
     print("==> Adapting SuSFS patch for OnePlus GKI 5.15...")
-    patch_in = sys.argv[1] if len(sys.argv) > 1 else '/tmp/susfs/kernel_patches/50_add_susfs_in_gki-android14-5.15.patch'
+    patch_in = sys.argv[1] if len(sys.argv) > 1 else '/tmp/susfs/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch'
     patch_out = sys.argv[2] if len(sys.argv) > 2 else 'susfs.patch'
 
     with open(patch_in, 'r', encoding='utf-8', errors='ignore') as f:
@@ -52,8 +52,8 @@ extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;
 
     idx = p.find('diff --git a/fs/namespace.c ')
     if idx != -1:
-        h1 = p.find('@@ -32,10 +32,20 @@', idx)
-        h2 = p.find('@@ -144,6 +154,10 @@', idx)
+        h1 = p.find('@@ -32,', idx)
+        h2 = p.find('@@ -14', idx)
         if h1 != -1 and h2 != -1:
             p = p[:h1] + p[h2:]
 

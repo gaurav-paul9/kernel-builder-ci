@@ -103,7 +103,7 @@ def main():
             "title": "KernelSU-Next + SuSFS",
             "desc": "KernelSU-Next (pershoot dev-susfs) with full SuSFS v1.5.5 kernel patches",
             "root_info": "KernelSU-Next (pershoot branch `dev-susfs`)",
-            "susfs_info": "SuSFS v1.5.5 (`gki-android14-5.15`)",
+            "susfs_info": "SuSFS v1.5.5 (`gki-android13-5.15`)",
             "manager_info": "KernelSU-Next Manager APK + SuSFS Manager APK"
         },
         "resukisu-susfs": {
@@ -111,7 +111,7 @@ def main():
             "title": "BakaSU (ReSukiSU) + SuSFS",
             "desc": "BakaSU / ReSukiSU (main branch) with full SuSFS v1.5.5 kernel patches",
             "root_info": "BakaSU / ReSukiSU (branch `main`)",
-            "susfs_info": "SuSFS v1.5.5 (`gki-android14-5.15`)",
+            "susfs_info": "SuSFS v1.5.5 (`gki-android13-5.15`)",
             "manager_info": "KernelSU Manager / KernelSU-Next Manager / BakaSU Manager + SuSFS Manager"
         }
     }
@@ -166,7 +166,7 @@ def main():
 - **ROM Directory:** [{rom_dir_url}]({rom_dir_url})
 - **KernelSU-Next:** [KernelSU-Next/KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) (`dev`)
 - **KernelSU-Next (SuSFS):** [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next/tree/dev-susfs) (`dev-susfs`)
-- **SuSFS (simonpunk):** [simonpunk/susfs4ksu](https://gitlab.com/simonpunk/susfs4ksu) (`gki-android14-5.15`)
+- **SuSFS (simonpunk):** [simonpunk/susfs4ksu](https://gitlab.com/simonpunk/susfs4ksu) (`gki-android13-5.15`)
 - **BakaSU (ReSukiSU):** [Baka-SU/BakaSU](https://github.com/Baka-SU/BakaSU) (`main`)
 
 ---
