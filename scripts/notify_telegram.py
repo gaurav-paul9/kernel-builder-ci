@@ -4,6 +4,7 @@ import os
 import json
 import glob
 import urllib.request
+
 def parse_env_file(filepath):
     data = {}
     if not os.path.isfile(filepath):
@@ -26,15 +27,16 @@ def main():
         sys.exit(0)
 
     if len(sys.argv) < 5:
-        print("Usage: notify_telegram.py <rom> <sublevel> <tag_name> <date_display> [repo] [assets_dir]")
+        print("Usage: notify_telegram.py <rom> <sublevel> <tag_name> <date_display> [latest_rom_zip] [repo] [assets_dir]")
         sys.exit(0)
 
     rom = sys.argv[1]
     sublevel = sys.argv[2]
     tag_name = sys.argv[3]
     date_display = sys.argv[4]
-    gh_repo = sys.argv[5] if len(sys.argv) > 5 else "gaurav-paul9/kernel-builder-ci"
-    assets_dir = sys.argv[6] if len(sys.argv) > 6 else "release_assets"
+    latest_rom_zip = sys.argv[5] if len(sys.argv) > 5 and not sys.argv[5].startswith("gaurav") and not "/" in sys.argv[5] else "Unknown"
+    gh_repo = sys.argv[6] if len(sys.argv) > 6 else "gaurav-paul9/kernel-builder-ci"
+    assets_dir = sys.argv[7] if len(sys.argv) > 7 else "release_assets"
 
     release_url = f"https://github.com/{gh_repo}/releases/tag/{tag_name}"
 
@@ -60,11 +62,11 @@ def main():
         if not modules_repo and env_data.get("MODULES_REPO"):
             modules_repo = env_data["MODULES_REPO"]
 
-    if rom.lower() == "yaap":
+    if rom.lower() == "lunaris":
         kernel_repo = kernel_repo or "https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550"
         modules_repo = modules_repo or "https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550-modules"
     else:
-        kernel_repo = kernel_repo or "https://github.com/OnePlus12R-development/android_kernel_oneplus_sm8550"
+        kernel_repo = kernel_repo or "https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550"
         modules_repo = modules_repo or "https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550-modules"
 
     k_link = f"<a href='{kernel_repo}'>kernel</a>" + (f" (<code>{kernel_short_sha}</code>)" if kernel_short_sha else "")
@@ -75,8 +77,8 @@ def main():
     boot_items = [
         ("vanilla", "boot.img", "Vanilla / Clean Stock ROM"),
         ("ksun", "boot-ksun.img", "KernelSU-Next (dev)"),
-        ("ksun-susfs", "boot-ksun-susfs.img", "KernelSU-Next (dev-susfs) + SuSFS"),
-        ("resukisu-susfs", "boot-resuki-susfs.img", "BakaSU (ReSukiSU) + SuSFS")
+        ("ksun-susfs", "boot-ksun-susfs.img", "KernelSU-Next (dev-susfs) + SuSFS v1.5.5"),
+        ("resukisu-susfs", "boot-resuki-susfs.img", "BakaSU (ReSukiSU) + SuSFS v1.5.5")
     ]
 
     for var, img, def_desc in boot_items:
@@ -91,6 +93,7 @@ def main():
     msg = f"""🔥 <b>New Kernel Release for OnePlus 12R (Aston)</b>
 
 📱 <b>ROM:</b> #{rom}
+📦 <b>Target ROM Build:</b> <code>{latest_rom_zip}</code>
 🐧 <b>Kernel:</b> Linux 5.15.{sublevel} (SM8550)
 ⏰ <b>Build Time:</b> {date_display}
 

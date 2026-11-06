@@ -18,7 +18,7 @@ def parse_env_file(filepath):
 
 def main():
     if len(sys.argv) < 10:
-        print("Usage: generate_release_notes.py <rom> <sublevel> <date_display> <clang_ver> <k_repo> <k_branch> <m_repo> <m_branch> <base_url> [out_file] [assets_dir]")
+        print("Usage: generate_release_notes.py <rom> <sublevel> <date_display> <clang_ver> <k_repo> <k_branch> <m_repo> <m_branch> <base_url> [latest_rom_zip] [out_file] [assets_dir]")
         sys.exit(1)
 
     rom = sys.argv[1]
@@ -30,8 +30,9 @@ def main():
     m_repo = sys.argv[7].rstrip(".git")
     m_branch = sys.argv[8]
     base_url = sys.argv[9]
-    out_file = sys.argv[10] if len(sys.argv) > 10 else "release_notes.md"
-    assets_dir = sys.argv[11] if len(sys.argv) > 11 else "release_assets"
+    latest_rom_zip = sys.argv[10] if len(sys.argv) > 10 and sys.argv[10] and not sys.argv[10].endswith(".md") else "Unknown"
+    out_file = sys.argv[11] if len(sys.argv) > 11 else "release_notes.md"
+    assets_dir = sys.argv[12] if len(sys.argv) > 12 else "release_assets"
 
     # Read checksums
     checksums = ""
@@ -77,31 +78,77 @@ def main():
     else:
         m_ref_md = f"[{m_repo}]({m_repo}) (`{m_branch}`)"
 
-    # Format available images info
-    # Default descriptions
+    rom_dir_url = f"https://files.gauravbuilds.xyz/release/aston/{rom}/"
+
+    # Detailed specifications for boot images
     boot_items = {
-        "vanilla": ("boot.img", "Clean Stock ROM Kernel (Repacked base ROM boot.img with compiled Image)"),
-        "ksun": ("boot-ksun.img", "KernelSU-Next (Official dev branch)"),
-        "ksun-susfs": ("boot-ksun-susfs.img", "KernelSU-Next (pershoot dev-susfs) + SuSFS v1.5.5"),
-        "resukisu-susfs": ("boot-resuki-susfs.img", "BakaSU / ReSukiSU (main branch) + SuSFS v1.5.5")
+        "vanilla": {
+            "file": "boot.img",
+            "title": "Clean Stock ROM Kernel",
+            "desc": "Repacked base ROM boot.img with clean compiled Image (no root modifications)",
+            "root_info": "None (Stock Unrooted)",
+            "susfs_info": "None",
+            "manager_info": "N/A"
+        },
+        "ksun": {
+            "file": "boot-ksun.img",
+            "title": "KernelSU-Next",
+            "desc": "KernelSU-Next official dev branch",
+            "root_info": "KernelSU-Next (branch `dev`)",
+            "susfs_info": "None",
+            "manager_info": "KernelSU-Next Manager APK"
+        },
+        "ksun-susfs": {
+            "file": "boot-ksun-susfs.img",
+            "title": "KernelSU-Next + SuSFS",
+            "desc": "KernelSU-Next (pershoot dev-susfs) with full SuSFS v1.5.5 kernel patches",
+            "root_info": "KernelSU-Next (pershoot branch `dev-susfs`)",
+            "susfs_info": "SuSFS v1.5.5 (`gki-android14-5.15`)",
+            "manager_info": "KernelSU-Next Manager APK + SuSFS Manager APK"
+        },
+        "resukisu-susfs": {
+            "file": "boot-resuki-susfs.img",
+            "title": "BakaSU (ReSukiSU) + SuSFS",
+            "desc": "BakaSU / ReSukiSU (main branch) with full SuSFS v1.5.5 kernel patches",
+            "root_info": "BakaSU / ReSukiSU (branch `main`)",
+            "susfs_info": "SuSFS v1.5.5 (`gki-android14-5.15`)",
+            "manager_info": "KernelSU Manager / KernelSU-Next Manager / BakaSU Manager + SuSFS Manager"
+        }
     }
 
     boot_lines = []
-    for var, (img_name, default_desc) in boot_items.items():
+    for var, spec in boot_items.items():
+        img_name = spec["file"]
+        title = spec["title"]
+        root_info = spec["root_info"]
+        susfs_info = spec["susfs_info"]
+        manager_info = spec["manager_info"]
+        desc = spec["desc"]
+
         if var in variants_info:
             vdata = variants_info[var]
-            desc = vdata.get("ROOT_DESC") or default_desc
-            boot_lines.append(f"- 💿 **`{img_name}`**\n  - **Details:** {desc}")
-        elif not variants_info: # fallback when no metadata files
-            boot_lines.append(f"- 💿 **`{img_name}`**\n  - **Details:** {default_desc}")
+            if vdata.get("ROOT_DESC"):
+                desc = vdata["ROOT_DESC"]
+            if vdata.get("ROOT_VERSION"):
+                root_info += f" @ `{vdata['ROOT_VERSION']}`"
+            if vdata.get("SUSFS_VERSION"):
+                susfs_info = vdata["SUSFS_VERSION"]
+
+        boot_lines.append(f"""### 💿 `{img_name}` ({title})
+- **Description:** {desc}
+- **Root Solution:** {root_info}
+- **SuSFS Version:** {susfs_info}
+- **Compatible Managers:** {manager_info}
+""")
 
     boot_imgs_md = "\n".join(boot_lines)
 
     md = f"""# 🚀 {rom} OnePlus 12R (Aston / SM8550) Kernel Release
 
-### 📱 Build Information
-- **ROM:** `{rom}`
-- **Device:** OnePlus 12R (`aston` / `sm8550`)
+### 📱 Target ROM & Build Information
+- **Target ROM Package:** [`{latest_rom_zip}`]({rom_dir_url})
+- **Base `boot.img` Source:** [{base_url}]({base_url})
+- **Device:** OnePlus 12R (`aston` / Qualcomm Snapdragon 8 Gen 2 / `sm8550`)
 - **Linux Kernel Version:** `5.15.{sublevel}`
 - **Build Timestamp:** `{date_display}`
 - **Compiler:** `{clang_ver}` (AOSP Clang with LLVM LLD)
@@ -116,7 +163,7 @@ def main():
 ### 🔗 Source References & Commit SHAs
 - **Kernel Tree:** {k_ref_md}
 - **Modules Tree:** {m_ref_md}
-- **Base `boot.img` Source:** [{base_url}]({base_url})
+- **ROM Directory:** [{rom_dir_url}]({rom_dir_url})
 - **KernelSU-Next:** [KernelSU-Next/KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) (`dev`)
 - **KernelSU-Next (SuSFS):** [pershoot/KernelSU-Next](https://github.com/pershoot/KernelSU-Next/tree/dev-susfs) (`dev-susfs`)
 - **SuSFS (simonpunk):** [simonpunk/susfs4ksu](https://gitlab.com/simonpunk/susfs4ksu) (`gki-android14-5.15`)
@@ -125,9 +172,13 @@ def main():
 ---
 
 ### ⚡ Flashing Instructions
-Reboot device into bootloader / fastboot mode:
+1. Download your preferred `.img` from the assets below.
+2. Reboot your device into bootloader mode:
 ```bash
 adb reboot bootloader
+```
+3. Flash the boot image:
+```bash
 fastboot flash boot <chosen_boot_image>.img
 fastboot reboot
 ```

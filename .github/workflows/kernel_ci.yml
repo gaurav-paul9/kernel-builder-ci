@@ -7,10 +7,10 @@ on:
         description: "Target ROM"
         required: true
         type: choice
-        default: "Yaap"
+        default: "Lunaris"
         options:
-          - "Yaap"
           - "Lunaris"
+          - "Yaap"
 
       build_type:
         description: "Root variant to build"
@@ -37,7 +37,7 @@ on:
           - "clang-r450784d"
 
       kernel_branch:
-        description: "Kernel Branch (Leave empty for default 'seventeen')"
+        description: "Kernel Branch (Leave empty for ROM default)"
         required: false
         type: string
         default: ""
@@ -61,7 +61,11 @@ jobs:
       kernel_branch: ${{ steps.set-urls.outputs.kernel_branch }}
       modules_repo: ${{ steps.set-urls.outputs.modules_repo }}
       modules_branch: ${{ steps.set-urls.outputs.modules_branch }}
+      latest_rom_zip: ${{ steps.get-rom-info.outputs.latest_rom_zip }}
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Resolve Matrix
         id: set-matrix
         run: |
@@ -71,6 +75,12 @@ jobs:
           else
             echo "matrix=[\"$BUILD_TYPE\"]" >> $GITHUB_OUTPUT
           fi
+
+      - name: Fetch Latest ROM Information
+        id: get-rom-info
+        run: |
+          ROM="${{ inputs.rom }}"
+          python3 "${GITHUB_WORKSPACE}/scripts/get_latest_rom.py" "$ROM"
 
       - name: Resolve Repository and Base URLs
         id: set-urls
@@ -87,10 +97,10 @@ jobs:
             M_BRANCH="seventeen"
           else
             BOOT_URL="https://files.gauravbuilds.xyz/release/aston/Lunaris/imgs/boot.img"
-            K_REPO="https://github.com/OnePlus12R-development/android_kernel_oneplus_sm8550"
-            K_BRANCH="seventeen"
+            K_REPO="https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550"
+            K_BRANCH="lunaris-16.2"
             M_REPO="https://github.com/gaurav-paul9/android_kernel_oneplus_sm8550-modules"
-            M_BRANCH="lunaris"
+            M_BRANCH="lunaris-16.2"
           fi
 
           if [ -n "$CUSTOM_BOOT_URL" ]; then
@@ -200,8 +210,9 @@ jobs:
               ;;
 
             "ksun")
-              echo "Setting up KernelSU-Next..."
+              echo "Setting up KernelSU-Next (official dev)..."
               curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/refs/heads/dev/kernel/setup.sh" | bash -s dev
+              echo "CONFIG_KSU=y" >> arch/arm64/configs/gki_defconfig
               ;;
 
             "ksun-susfs")
@@ -209,8 +220,10 @@ jobs:
               curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
 
               echo "Disabling Samsung KDP / RKP / DEFEX (not applicable for OnePlus)..."
-              sed -i 's/default y/default n/g' drivers/kernelsu/Kconfig 2>/dev/null || true
-              sed -i 's/default y/default n/g' KernelSU/kernel/Kconfig 2>/dev/null || true
+              sed -i 's/config KSU_SAMSUNG_KDP/config KSU_SAMSUNG_KDP_DISABLED/g' drivers/kernelsu/Kconfig KernelSU/kernel/Kconfig 2>/dev/null || true
+              sed -i 's/config KSU_SAMSUNG_RKP/config KSU_SAMSUNG_RKP_DISABLED/g' drivers/kernelsu/Kconfig KernelSU/kernel/Kconfig 2>/dev/null || true
+              sed -i 's/config KSU_SAMSUNG_DEFEX/config KSU_SAMSUNG_DEFEX_DISABLED/g' drivers/kernelsu/Kconfig KernelSU/kernel/Kconfig 2>/dev/null || true
+              sed -i 's/config KSU_SAMSUNG_NO_PATCH_TEXT/config KSU_SAMSUNG_NO_PATCH_TEXT_DISABLED/g' drivers/kernelsu/Kconfig KernelSU/kernel/Kconfig 2>/dev/null || true
               if [ -f drivers/kernelsu/compat/samsung_kdp.c ]; then
                 sed -i 's/#ifdef CONFIG_KSU_SAMSUNG_KDP/#if 0/g' drivers/kernelsu/compat/samsung_kdp.c
               fi
@@ -230,9 +243,7 @@ jobs:
               patch -p1 --fuzz=3 < susfs.patch
 
               {
-                echo "CONFIG_KSU_SAMSUNG_KDP=n"
-                echo "CONFIG_KSU_SAMSUNG_RKP=n"
-                echo "CONFIG_KSU_SAMSUNG_DEFEX=n"
+                echo "CONFIG_KSU=y"
                 echo "CONFIG_KSU_SUSFS=y"
                 echo "CONFIG_KSU_SUSFS_SUS_PATH=y"
                 echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
@@ -243,15 +254,13 @@ jobs:
                 echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
                 echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y"
                 echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
+                echo "CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER=y"
               } >> arch/arm64/configs/gki_defconfig
               ;;
 
             "resukisu-susfs")
               echo "Setting up BakaSU (ReSukiSU)..."
               curl -LSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/refs/heads/main/kernel/setup.sh" | bash -s main
-
-              echo "Adapting BakaSU for SuSFS (fake_state & susfs_compat)..."
-              python3 "${GITHUB_WORKSPACE}/scripts/patch_bakasu.py" .
 
               echo "Cloning simonpunk/susfs4ksu (gki-android14-5.15)..."
               git clone --depth=1 -b gki-android14-5.15 https://gitlab.com/simonpunk/susfs4ksu.git /tmp/susfs
@@ -264,7 +273,11 @@ jobs:
               echo "Applying SuSFS patch..."
               patch -p1 --fuzz=3 < susfs.patch
 
+              echo "Adapting BakaSU for SuSFS (fake_state, symbols & Kbuild)..."
+              python3 "${GITHUB_WORKSPACE}/scripts/patch_bakasu.py" .
+
               {
+                echo "CONFIG_KSU=y"
                 echo "CONFIG_KSU_SUSFS=y"
                 echo "CONFIG_KSU_SUSFS_SUS_PATH=y"
                 echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y"
@@ -275,6 +288,7 @@ jobs:
                 echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y"
                 echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y"
                 echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y"
+                echo "CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER=y"
               } >> arch/arm64/configs/gki_defconfig
               ;;
           esac
@@ -294,6 +308,9 @@ jobs:
           echo "==> Configuring Kernel Defconfigs..."
           make O=out ARCH=arm64 SUBARCH=arm64 LLVM=1 LLVM_IAS=1 \
             gki_defconfig vendor/kalama_GKI.config vendor/oplus/kalama_GKI.config vendor/debugfs.config
+
+          echo "==> Generating UAPI headers..."
+          make -j$(nproc) O=out ARCH=arm64 SUBARCH=arm64 LLVM=1 LLVM_IAS=1 headers_install
 
           echo "==> Building Image with $(nproc) threads..."
           make -j$(nproc) O=out ARCH=arm64 SUBARCH=arm64 LLVM=1 LLVM_IAS=1 Image
@@ -340,7 +357,7 @@ jobs:
 
           BASE_BOOT_URL="${{ needs.prepare.outputs.base_boot_url }}"
           echo "==> Downloading base boot.img from: $BASE_BOOT_URL"
-          curl -fL -o base_boot.img "$BASE_BOOT_URL"
+          curl -fL -H "User-Agent: Mozilla/5.0" -o base_boot.img "$BASE_BOOT_URL"
 
           echo "==> Unpacking base boot.img..."
           /tmp/magiskboot unpack base_boot.img
@@ -422,6 +439,7 @@ jobs:
             echo "ROOT_DESC=${ROOT_DESC}"
             echo "ROOT_VERSION=${ROOT_VERSION}"
             echo "SUSFS_VERSION=${SUSFS_VERSION}"
+            echo "LATEST_ROM_ZIP=${{ needs.prepare.outputs.latest_rom_zip }}"
           } > "metadata_${VARIANT}.env"
 
       - name: Upload Boot Image Artifact
@@ -462,7 +480,7 @@ jobs:
           cat *.sha256 > SHA256SUMS.txt || true
           rm -f *.sha256
 
-          SUBLEVEL="211"
+          SUBLEVEL="220"
           if ls metadata_*.env 1> /dev/null 2>&1; then
             FIRST_META=$(ls metadata_*.env | head -n 1)
             SUBLEVEL_VAL=$(grep "^SUBLEVEL=" "$FIRST_META" | cut -d '=' -f 2)
@@ -472,6 +490,7 @@ jobs:
           fi
 
           ROM="${{ needs.prepare.outputs.rom }}"
+          LATEST_ZIP="${{ needs.prepare.outputs.latest_rom_zip }}"
           DATE_TAG=$(TZ='Asia/Kolkata' date +"%Y%m%d_%H%M")
           DATE_DISPLAY=$(TZ='Asia/Kolkata' date +"%Y-%m-%d %I:%M %p IST")
 
@@ -493,6 +512,7 @@ jobs:
             "${{ needs.prepare.outputs.modules_repo }}" \
             "${{ needs.prepare.outputs.modules_branch }}" \
             "${{ needs.prepare.outputs.base_boot_url }}" \
+            "${LATEST_ZIP}" \
             "${GITHUB_WORKSPACE}/release_notes.md" \
             "${GITHUB_WORKSPACE}/release_assets"
 
@@ -516,5 +536,6 @@ jobs:
             "$SUBLEVEL" \
             "$TAG_NAME" \
             "$DATE_DISPLAY" \
+            "${{ needs.prepare.outputs.latest_rom_zip }}" \
             "${{ github.repository }}" \
             "${GITHUB_WORKSPACE}/release_assets" || echo "==> Telegram notification completed with warning or skipped."
